@@ -24,7 +24,22 @@ const nextConfig = {
     // your project has type errors.
     ignoreBuildErrors: true,
   },
-  output: 'standalone'
+  output: 'standalone',
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: `frame-ancestors 'self' https://*.google.com https://*.googleapis.com;
+                    script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.gstatic.com;
+                    img-src 'self' data: https://*.googleapis.com https://*.gstatic.com;`
+          }
+        ]
+      }
+    ]
+  }
 }
 
 module.exports = nextConfig 
