@@ -230,15 +230,14 @@ export default function StreetViewMap() {
 
   useEffect(() => {
     if (isLoaded && window.google?.maps) {
-      services.current.autocompleteService = new window.google.maps.places.AutocompleteService()
-      services.current.placesService = new window.google.maps.places.PlacesService(
-        document.createElement('div')
-      )
-    }
-  }, [isLoaded])
+      // Create a dummy div for PlacesService
+      const dummyDiv = document.createElement('div')
+      
+      services.current = {
+        autocompleteService: new window.google.maps.places.AutocompleteService(),
+        placesService: new window.google.maps.places.PlacesService(dummyDiv)
+      }
 
-  useEffect(() => {
-    if (isLoaded && window.google?.maps) {
       // Initialize with popular locations
       const defaultSuggestions: PlaceSearchResult[] = POPULAR_LOCATIONS.map(loc => ({
         description: loc.name,
@@ -648,7 +647,7 @@ export default function StreetViewMap() {
     }
   }
 
-  // Update the handleAddressChange function with proper types
+  // Update the handleAddressChange function
   const handleAddressChange = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const value = event.target.value
     setAddress(value)
@@ -662,84 +661,70 @@ export default function StreetViewMap() {
     try {
       const sessionToken = new google.maps.places.AutocompleteSessionToken()
       
-      const response = (await executeWithRateLimit(() => 
-        services.current.autocompleteService!.getPlacePredictions({
-          input: value,
-          types: ['geocode', 'establishment'],
-          sessionToken,
-        })
-      )) as AutocompleteResponse | null
+      // Directly use the autocomplete service without rate limiting
+      const response = await new Promise<AutocompleteResponse>((resolve) => {
+        services.current.autocompleteService?.getPlacePredictions(
+          {
+            input: value,
+            types: ['geocode', 'establishment'],
+            sessionToken,
+          },
+          (predictions, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
+              resolve({ predictions })
+            } else {
+              resolve({ predictions: [] })
+            }
+          }
+        )
+      })
 
-      if (!response) return // Handle rate limit case
+      if (!response) return
 
-      if (response?.predictions && response.predictions.length > 0) {
-        const service = new window.google.maps.places.PlacesService(document.createElement('div'))
-        const streetViewService = new window.google.maps.StreetViewService()
-
-        // Get details for each prediction
-        const detailedPredictions = await Promise.all(
-          response.predictions.slice(0, 5).map(async (prediction: { place_id: string; description: string }) => {
-            try {
-              const details = await new Promise<google.maps.places.PlaceResult>((resolve, reject) => {
-                service.getDetails({
+      const detailedPredictions = await Promise.all(
+        response.predictions.slice(0, 5).map(async (prediction: {
+          place_id: string;
+          description: string;
+        }) => {
+          try {
+            const details = await new Promise((resolve, reject) => {
+              services.current.placesService?.getDetails(
+                {
                   placeId: prediction.place_id,
-                  fields: ['geometry', 'name', 'formatted_address', 'types', 'photos'],
-                  sessionToken
-                }, (result: google.maps.places.PlaceResult | null, status: google.maps.places.PlacesServiceStatus) => {
+                  fields: ['geometry', 'name', 'formatted_address', 'photos'],
+                },
+                (result, status) => {
                   if (status === google.maps.places.PlacesServiceStatus.OK && result) {
                     resolve(result)
                   } else {
                     reject(new Error('Place details not found'))
                   }
-                })
-              })
-
-              if (!details.geometry?.location) {
-                return { ...prediction, hasStreetView: false, score: 0 }
-              }
-
-              // Check for street view availability with larger initial radius
-              let hasStreetView = false
-              let streetViewLocation = null
-              try {
-                const response = await streetViewService.getPanorama({
-                  location: details.geometry.location,
-                  radius: 500, // Increased initial check radius
-                  source: google.maps.StreetViewSource.DEFAULT
-                })
-                
-                if (response?.data?.location?.latLng) {
-                  hasStreetView = true
-                  streetViewLocation = response.data.location.latLng
                 }
-              } catch (e) {
-                hasStreetView = false
-              }
+              )
+            })
 
-              return {
-                ...prediction,
-                hasStreetView,
-                streetViewLocation,
-                details,
-                score: hasStreetView ? 100 : 50
-              }
-            } catch (error) {
-              console.log('Error getting details for prediction:', error)
-              return { ...prediction, hasStreetView: false, score: 0 }
+            return {
+              ...prediction,
+              details,
+              hasStreetView: true,
+              score: 100
             }
-          })
-        )
+          } catch (error) {
+            console.error('Error getting place details:', error)
+            return {
+              ...prediction,
+              hasStreetView: false,
+              score: 0
+            }
+          }
+        })
+      )
 
-        const sortedPredictions = detailedPredictions
-          .sort((a: PlaceSearchResult, b: PlaceSearchResult) => (b.score || 0) - (a.score || 0));
+      const sortedPredictions = detailedPredictions
+        .sort((a: PlaceSearchResult, b: PlaceSearchResult) => (b.score || 0) - (a.score || 0))
 
-        console.log('Sorted predictions with details:', sortedPredictions)
-        setSuggestions(sortedPredictions)
-        setShowSuggestions(true)
-      } else {
-        setSuggestions([])
-        setShowSuggestions(false)
-      }
+      setSuggestions(sortedPredictions)
+      setShowSuggestions(true)
     } catch (error) {
       console.error('Autocomplete error:', error)
       setSuggestions([])

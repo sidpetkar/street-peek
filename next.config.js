@@ -1,17 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'maps.googleapis.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'maps.gstatic.com',
-      },
-    ],
-    unoptimized: true
+    domains: ['maps.googleapis.com', 'maps.gstatic.com'],
   },
   eslint: {
     // Warning: This allows production builds to successfully complete even if
@@ -32,9 +22,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: `frame-ancestors 'self' https://*.google.com https://*.googleapis.com;
-                    script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.gstatic.com;
-                    img-src 'self' data: https://*.googleapis.com https://*.gstatic.com;`
+            value: "frame-ancestors 'self' https://*.google.com https://*.googleapis.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.gstatic.com; img-src 'self' data: https://*.googleapis.com https://*.gstatic.com"
           }
         ]
       }
