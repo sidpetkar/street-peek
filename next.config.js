@@ -1,7 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['maps.googleapis.com', 'maps.gstatic.com'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'maps.googleapis.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'maps.gstatic.com',
+      },
+    ],
     unoptimized: true
   },
   eslint: {
